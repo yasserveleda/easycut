@@ -1,4 +1,5 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect } from "react";
+import { useSyncExternalStoreWithSelector } from "use-sync-external-store/shim/with-selector";
 import { supabase } from "@/integrations/supabase/client";
 import type {
   Appointment, BlockedSlot, Service, ServiceCategory, Settings, Staff,
@@ -28,8 +29,28 @@ const subscribe = (l: () => void) => { listeners.add(l); return () => listeners.
 const emit = () => listeners.forEach((l) => l());
 const update = (fn: (s: State) => State) => { state = fn(state); emit(); };
 
+const getSnapshot = () => state;
+
+function shallowEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!Object.is(a[i], b[i])) return false;
+    return true;
+  }
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    const ka = Object.keys(a as object), kb = Object.keys(b as object);
+    if (ka.length !== kb.length) return false;
+    for (const k of ka) {
+      if (!Object.is((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k])) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
 export const useStore = <T,>(selector: (s: State) => T): T =>
-  useSyncExternalStore(subscribe, () => selector(state), () => selector(state));
+  useSyncExternalStoreWithSelector(subscribe, getSnapshot, getSnapshot, selector, shallowEqual);
 
 // --- mappers ---
 const mapService = (r: any): Service => ({
