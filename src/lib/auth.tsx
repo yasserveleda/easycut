@@ -61,6 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+
+
   useStoreInit(!!session);
 
   const signOut = async () => { await supabase.auth.signOut(); };
