@@ -6,7 +6,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { actions, useStore } from "@/lib/store";
+import { useStore } from "@/lib/store";
+import { Services } from "@/services";
+import { AgendamentoStatus } from "@/domain/agendamento/enums";
 import { currency, formatDateLong, minutesToLabel } from "@/lib/format";
 import { CalendarX, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -88,7 +90,7 @@ function Page() {
                       {!isPast && a.status !== "cancelado" && a.status !== "finalizado" && (
                         <Button
                           variant="ghost" size="sm" className="text-destructive mt-1"
-                          onClick={() => { actions.setAppointmentStatus(a.id, "cancelado"); toast.success("Agendamento cancelado"); }}
+                          onClick={async () => { await Services.agendamento.alterarStatus({ id: a.id, status: AgendamentoStatus.CANCELADO }); toast.success("Agendamento cancelado"); }}
                         >Cancelar</Button>
                       )}
                     </div>

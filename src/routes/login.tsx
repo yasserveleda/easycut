@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
+import { Services } from "@/services";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,16 +22,23 @@ function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("Bem-vindo!");
-    nav({ to: "/admin" });
+    try {
+      await Services.usuario.login({ email, senha: password });
+      toast.success("Bem-vindo!");
+      nav({ to: "/admin" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao entrar");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoogle = async () => {
-    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin + "/admin" });
-    if (r.error) toast.error("Falha ao entrar com Google");
+    try {
+      await Services.usuario.loginGoogle({ redirectUrl: window.location.origin + "/admin" });
+    } catch {
+      toast.error("Falha ao entrar com Google");
+    }
   };
 
   return (

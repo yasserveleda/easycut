@@ -8,7 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { actions, useStore } from "@/lib/store";
+import { useStore } from "@/lib/store";
+import { Services } from "@/services";
+import { AgendamentoStatus } from "@/domain/agendamento/enums";
 import { currency, dateToISO, formatDateLong, isoToDate, minutesToLabel, weekdays } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toMinutes } from "@/lib/scheduling";
@@ -269,8 +271,9 @@ function AppointmentDialog({ apt, onClose }: { apt: Appointment | null; onClose:
   if (!apt) return null;
   const svc = services.find((s) => s.id === apt.serviceId)!;
   const sp = staff.find((s) => s.id === apt.staffId)!;
-  const setStatus = (status: Appointment["status"], label: string) => {
-    actions.setAppointmentStatus(apt.id, status); toast.success(label); onClose();
+  const setStatus = async (status: Appointment["status"], label: string) => {
+    await Services.agendamento.alterarStatus({ id: apt.id, status: status as AgendamentoStatus });
+    toast.success(label); onClose();
   };
   return (
     <Dialog open onOpenChange={onClose}>

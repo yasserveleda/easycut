@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { Services } from "@/services";
+import type { SessaoUsuario, Usuario } from "@/domain/usuario/Usuario";
 import { useStoreInit, resetStore } from "./store";
 
 interface AuthCtx {
-  user: User | null;
-  session: Session | null;
+  user: Usuario | null;
+  session: SessaoUsuario | null;
   isAdmin: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -16,32 +16,25 @@ const Ctx = createContext<AuthCtx>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<SessaoUsuario | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-
   const [loading, setLoading] = useState(true);
   const [roleChecked, setRoleChecked] = useState(false);
 
   useEffect(() => {
     const checkRole = (userId: string) => {
-      supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId)
-        .eq("role", "admin")
-        .maybeSingle()
-        .then(({ data }) => {
-          setIsAdmin(!!data);
-          setRoleChecked(true);
-        });
+      Services.usuario.ehAdmin(userId).then((admin) => {
+        setIsAdmin(admin);
+        setRoleChecked(true);
+      });
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
+    const unsub = Services.usuario.onMudancaSessao((_event, s) => {
       setSession(s);
       setLoading(false);
-      if (s?.user) {
+      if (s?.usuario) {
         setRoleChecked(false);
-        setTimeout(() => checkRole(s.user.id), 0);
+        setTimeout(() => checkRole(s.usuario.id), 0);
       } else {
         setIsAdmin(false);
         setRoleChecked(true);
@@ -49,32 +42,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    Services.usuario.obterSessao().then((s) => {
+      setSession(s);
       setLoading(false);
-      if (data.session?.user) {
-        checkRole(data.session.user.id);
-      } else {
-        setRoleChecked(true);
-      }
+      if (s?.usuario) checkRole(s.usuario.id);
+      else setRoleChecked(true);
     });
 
-    return () => subscription.unsubscribe();
+    return () => unsub();
   }, []);
-
-
 
   useStoreInit(!!session);
 
-  const signOut = async () => { await supabase.auth.signOut(); };
+  const signOut = async () => { await Services.usuario.sair(); };
 
   return (
-    <Ctx.Provider value={{ user: session?.user ?? null, session, isAdmin, loading: loading || (!!session && !roleChecked), signOut }}>
+    <Ctx.Provider value={{ user: session?.usuario ?? null, session, isAdmin, loading: loading || (!!session && !roleChecked), signOut }}>
       {children}
     </Ctx.Provider>
   );
 }
-
-
 
 export const useAuth = () => useContext(Ctx);

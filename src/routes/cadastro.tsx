@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { Services } from "@/services";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,14 +23,20 @@ function SignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email, password,
-      options: { emailRedirectTo: window.location.origin + "/admin", data: { full_name: name } },
-    });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("Conta criada! Verifique seu e-mail para confirmar.");
-    nav({ to: "/login" });
+    try {
+      await Services.usuario.cadastrar({
+        nome: name,
+        email,
+        senha: password,
+        redirectUrl: window.location.origin + "/admin",
+      });
+      toast.success("Conta criada! Verifique seu e-mail para confirmar.");
+      nav({ to: "/login" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao criar conta");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

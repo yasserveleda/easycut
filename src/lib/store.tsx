@@ -1,8 +1,18 @@
 import { useEffect } from "react";
 import { useSyncExternalStoreWithSelector } from "use-sync-external-store/shim/with-selector";
-import { supabase } from "@/integrations/supabase/client";
-import { createPublicAppointment } from "./appointments.functions";
-import type { Appointment, BlockedSlot, Service, ServiceCategory, Settings, Staff } from "./types";
+import { Services } from "@/services";
+import type { Agendamento, AgendamentoOcupado } from "@/domain/agendamento/Agendamento";
+import type { Bloqueio } from "@/domain/bloqueio/Bloqueio";
+import type { Configuracao } from "@/domain/configuracao/Configuracao";
+import type { Profissional } from "@/domain/profissional/Profissional";
+import type { Servico } from "@/domain/servico/Servico";
+import type {
+  Appointment,
+  BlockedSlot,
+  Service,
+  Settings,
+  Staff,
+} from "./types";
 import { defaultBusinessHours } from "./scheduling";
 
 interface State {
@@ -59,97 +69,114 @@ function shallowEqual(a: unknown, b: unknown): boolean {
 export const useStore = <T,>(selector: (s: State) => T): T =>
   useSyncExternalStoreWithSelector(subscribe, getSnapshot, getSnapshot, selector, shallowEqual);
 
-// --- mappers ---
-const mapService = (r: any): Service => ({
-  id: r.id,
-  name: r.name,
-  description: r.description ?? "",
-  price: Number(r.price),
-  durationMin: r.duration_min,
-  category: r.category as ServiceCategory,
-  color: r.color,
-  active: r.active,
+// --- adaptadores domain → shape interno legado da store ---
+const toService = (s: Servico): Service => ({
+  id: s.id,
+  name: s.nome,
+  description: s.descricao,
+  price: s.preco,
+  durationMin: s.duracaoMin,
+  category: s.categoria,
+  color: s.cor,
+  active: s.ativo,
 });
-const mapStaff = (r: any): Staff => ({
-  id: r.id,
-  name: r.name,
-  role: r.role ?? "",
-  avatarColor: r.avatar_color,
-  serviceIds: r.service_ids ?? [],
+const toStaff = (p: Profissional): Staff => ({
+  id: p.id,
+  name: p.nome,
+  role: p.cargo,
+  avatarColor: p.corAvatar,
+  serviceIds: p.servicoIds,
 });
-const mapAppt = (r: any): Appointment => ({
-  id: r.id,
-  serviceId: r.service_id,
-  staffId: r.staff_id,
-  clientName: r.client_name,
-  clientPhone: r.client_phone,
-  clientEmail: r.client_email ?? undefined,
-  date: r.date,
-  startTime: r.start_time,
-  durationMin: r.duration_min,
-  status: r.status,
-  notes: r.notes ?? undefined,
-  createdAt: r.created_at,
+const toAppointment = (a: Agendamento): Appointment => ({
+  id: a.id,
+  serviceId: a.servicoId,
+  staffId: a.profissionalId,
+  clientName: a.clienteNome,
+  clientPhone: a.clienteTelefone,
+  clientEmail: a.clienteEmail,
+  date: a.data,
+  startTime: a.horaInicio,
+  durationMin: a.duracaoMin,
+  status: a.status,
+  notes: a.observacoes,
+  createdAt: a.criadoEm,
 });
-const mapBlocked = (r: any): BlockedSlot => ({
-  id: r.id,
-  staffId: r.staff_id ?? undefined,
-  date: r.date,
-  startTime: r.start_time,
-  durationMin: r.duration_min,
-  reason: r.reason ?? undefined,
+const toBusyAppointment = (b: AgendamentoOcupado, i: number): Appointment => ({
+  id: `busy-${i}`,
+  serviceId: "",
+  staffId: b.profissionalId,
+  clientName: "Ocupado",
+  clientPhone: "",
+  date: b.data,
+  startTime: b.horaInicio,
+  durationMin: b.duracaoMin,
+  status: b.status,
+  createdAt: "",
+});
+const toBlocked = (b: Bloqueio): BlockedSlot => ({
+  id: b.id,
+  staffId: b.profissionalId,
+  date: b.data,
+  startTime: b.horaInicio,
+  durationMin: b.duracaoMin,
+  reason: b.motivo,
+});
+const toSettings = (c: Configuracao): Settings => ({
+  salonName: c.nomeSalao,
+  bufferMin: c.bufferMin,
+  businessHours: c.horarios.length ? c.horarios : defaultBusinessHours(),
 });
 
-// --- loaders ---
+// --- loaders (delegam à camada de Services) ---
 async function loadAll() {
   const [svc, st, ap, bl, se] = await Promise.all([
-    supabase.from("services").select("*").order("name"),
-    supabase.from("staff").select("*").order("name"),
-    supabase.from("appointments").select("*"),
-    supabase.from("blocked_slots").select("*"),
-    supabase.from("settings").select("*").eq("id", "default").maybeSingle(),
+    Services.servico.listar(),
+    Services.profissional.listar(),
+    Services.agendamento.listar(),
+    Services.bloqueio.listar(),
+    Services.configuracao.obter(),
   ]);
   update((s) => ({
     ...s,
-    services: (svc.data ?? []).map(mapService),
-    staff: (st.data ?? []).map(mapStaff),
-    appointments: (ap.data ?? []).map(mapAppt),
-    blocked: (bl.data ?? []).map(mapBlocked),
-    settings: se.data
-      ? {
-          salonName: se.data.salon_name,
-          bufferMin: se.data.buffer_min,
-          businessHours: (se.data.business_hours as any) ?? defaultBusinessHours(),
-        }
-      : s.settings,
+    services: svc.map(toService),
+    staff: st.map(toStaff),
+    appointments: ap.map(toAppointment),
+    blocked: bl.map(toBlocked),
+    settings: se ? toSettings(se) : s.settings,
     loaded: true,
   }));
 }
 
 async function loadBusySlots() {
-  // Public-safe: only occupied slots, no PII. Used when not signed in.
   const today = new Date();
   today.setMonth(today.getMonth() - 1);
   const to = new Date();
   to.setMonth(to.getMonth() + 3);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
-  const { data } = await supabase.rpc("get_busy_slots", { _from: iso(today), _to: iso(to) });
+  const busy = await Services.agendamento.listarOcupados(iso(today), iso(to));
   update((s) => ({
     ...s,
-    appointments: (data ?? []).map((r: any, i: number) => ({
-      id: `busy-${i}`,
-      serviceId: "",
-      staffId: r.staff_id,
-      clientName: "Ocupado",
-      clientPhone: "",
-      date: r.date,
-      startTime: r.start_time,
-      durationMin: r.duration_min,
-      status: r.status as any,
-      createdAt: "",
-    })),
+    appointments: busy.map(toBusyAppointment),
     loaded: true,
   }));
+}
+
+async function loadPublicCatalog() {
+  const [svc, st, bl, se] = await Promise.all([
+    Services.servico.listar(),
+    Services.profissional.listar(),
+    Services.bloqueio.listar(),
+    Services.configuracao.obter(),
+  ]);
+  update((s) => ({
+    ...s,
+    services: svc.map(toService),
+    staff: st.map(toStaff),
+    blocked: bl.map(toBlocked),
+    settings: se ? toSettings(se) : s.settings,
+  }));
+  await loadBusySlots();
+  update((s) => ({ ...s, loaded: true }));
 }
 
 let inited = false;
@@ -158,65 +185,13 @@ let unsubRealtime: (() => void) | null = null;
 export function initStore(isAuthed: boolean) {
   if (inited) return;
   inited = true;
-  if (isAuthed) {
-    loadAll();
-  } else {
-    Promise.all([
-      supabase
-        .from("services")
-        .select("*")
-        .order("name")
-        .then((r) => update((s) => ({ ...s, services: (r.data ?? []).map(mapService) }))),
-      supabase
-        .from("staff")
-        .select("*")
-        .order("name")
-        .then((r) => update((s) => ({ ...s, staff: (r.data ?? []).map(mapStaff) }))),
-      supabase
-        .from("blocked_slots")
-        .select("*")
-        .then((r) => update((s) => ({ ...s, blocked: (r.data ?? []).map(mapBlocked) }))),
-      supabase
-        .from("settings")
-        .select("*")
-        .eq("id", "default")
-        .maybeSingle()
-        .then((r) => {
-          if (r.data)
-            update((s) => ({
-              ...s,
-              settings: {
-                salonName: r.data!.salon_name,
-                bufferMin: r.data!.buffer_min,
-                businessHours: (r.data!.business_hours as any) ?? defaultBusinessHours(),
-              },
-            }));
-        }),
-      loadBusySlots(),
-    ]).then(() => update((s) => ({ ...s, loaded: true })));
-  }
+  if (isAuthed) loadAll();
+  else loadPublicCatalog();
 
-  const channel = supabase
-    .channel("salon-db")
-    .on("postgres_changes", { event: "*", schema: "public", table: "services" }, () =>
-      refresh(isAuthed),
-    )
-    .on("postgres_changes", { event: "*", schema: "public", table: "staff" }, () =>
-      refresh(isAuthed),
-    )
-    .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () =>
-      refresh(isAuthed),
-    )
-    .on("postgres_changes", { event: "*", schema: "public", table: "blocked_slots" }, () =>
-      refresh(isAuthed),
-    )
-    .on("postgres_changes", { event: "*", schema: "public", table: "settings" }, () =>
-      refresh(isAuthed),
-    )
-    .subscribe();
-  unsubRealtime = () => {
-    supabase.removeChannel(channel);
-  };
+  unsubRealtime = Services.realtime.subscribe(
+    ["services", "staff", "appointments", "blocked_slots", "settings"],
+    () => refresh(isAuthed),
+  );
 }
 
 function refresh(isAuthed: boolean) {
@@ -238,84 +213,3 @@ export function useStoreInit(isAuthed: boolean) {
     initStore(isAuthed);
   }, [isAuthed]);
 }
-
-// --- actions ---
-export const actions = {
-  upsertService: async (svc: Omit<Service, "id"> & { id?: string }) => {
-    const payload = {
-      name: svc.name,
-      description: svc.description,
-      price: svc.price,
-      duration_min: svc.durationMin,
-      category: svc.category,
-      color: svc.color,
-      active: svc.active,
-    };
-    if (svc.id) await supabase.from("services").update(payload).eq("id", svc.id);
-    else await supabase.from("services").insert(payload);
-  },
-  deleteService: async (id: string) => {
-    await supabase.from("services").delete().eq("id", id);
-  },
-
-  createAppointment: async (
-    a: Omit<Appointment, "id" | "createdAt" | "status"> & { status?: Appointment["status"] },
-  ) => {
-    const result = await createPublicAppointment({
-      data: {
-        serviceId: a.serviceId,
-        staffId: a.staffId,
-        clientName: a.clientName,
-        clientPhone: a.clientPhone,
-        clientEmail: a.clientEmail ?? "",
-        date: a.date,
-        startTime: a.startTime,
-        notes: a.notes,
-      },
-    });
-    return {
-      id: result.id,
-      serviceId: a.serviceId,
-      staffId: a.staffId,
-      clientName: a.clientName,
-      clientPhone: a.clientPhone,
-      clientEmail: a.clientEmail,
-      date: a.date,
-      startTime: a.startTime,
-      durationMin: result.durationMin,
-      status: result.status as Appointment["status"],
-      notes: a.notes,
-      createdAt: result.createdAt,
-    };
-  },
-  setAppointmentStatus: async (id: string, status: Appointment["status"]) => {
-    await supabase.from("appointments").update({ status }).eq("id", id);
-  },
-
-  addBlocked: async (b: Omit<BlockedSlot, "id">) => {
-    await supabase.from("blocked_slots").insert({
-      staff_id: b.staffId ?? null,
-      date: b.date,
-      start_time: b.startTime,
-      duration_min: b.durationMin,
-      reason: b.reason ?? null,
-    });
-  },
-  removeBlocked: async (id: string) => {
-    await supabase.from("blocked_slots").delete().eq("id", id);
-  },
-
-  updateSettings: async (patch: Partial<Settings>) => {
-    const cur = state.settings;
-    const next = { ...cur, ...patch };
-    await supabase
-      .from("settings")
-      .update({
-        salon_name: next.salonName,
-        buffer_min: next.bufferMin,
-        business_hours: next.businessHours as any,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", "default");
-  },
-};

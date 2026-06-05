@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { Services } from "@/services";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,11 +20,15 @@ function ResetPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("Senha atualizada!");
-    nav({ to: "/admin" });
+    try {
+      await Services.usuario.redefinirSenha({ senha: password });
+      toast.success("Senha atualizada!");
+      nav({ to: "/admin" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao atualizar senha");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

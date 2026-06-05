@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
-import { actions, useStore } from "@/lib/store";
+import { useStore } from "@/lib/store";
+import { Services } from "@/services";
 import { currency, dateToISO, formatDateLong, minutesToLabel } from "@/lib/format";
 import { generateAvailableSlots } from "@/lib/scheduling";
 import { cn } from "@/lib/utils";
@@ -76,15 +77,14 @@ function BookingPage() {
   const handleConfirm = async () => {
     if (!service || !staffId || !date || !time) return;
     try {
-      const apt = await actions.createAppointment({
-        serviceId: service.id,
-        staffId,
-        clientName: clientName.trim(),
-        clientPhone,
-        clientEmail: clientEmail || undefined,
-        date: dateToISO(date),
-        startTime: time,
-        durationMin: service.durationMin,
+      const apt = await Services.agendamento.criar({
+        servicoId: service.id,
+        profissionalId: staffId,
+        clienteNome: clientName.trim(),
+        clienteTelefone: clientPhone,
+        clienteEmail: clientEmail || undefined,
+        data: dateToISO(date),
+        horaInicio: time,
       });
       setConfirmed(apt.id);
       toast.success("Agendamento confirmado!");

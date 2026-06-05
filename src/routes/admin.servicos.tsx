@@ -11,7 +11,9 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2 } from "lucide-react";
-import { actions, useStore } from "@/lib/store";
+import { useStore } from "@/lib/store";
+import { Services } from "@/services";
+import { CategoriaServico } from "@/domain/servico/enums";
 import { currency, minutesToLabel } from "@/lib/format";
 import type { Service, ServiceCategory } from "@/lib/types";
 import { toast } from "sonner";
@@ -61,8 +63,8 @@ function ServicesPage() {
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="icon" onClick={() => openEdit(s)}><Pencil className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="icon" className="text-destructive" onClick={() => {
-                    actions.deleteService(s.id); toast.success("Serviço removido");
+                  <Button variant="ghost" size="icon" className="text-destructive" onClick={async () => {
+                    await Services.servico.remover(s.id); toast.success("Serviço removido");
                   }}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
@@ -87,12 +89,18 @@ function ServiceDialog({ open, onOpenChange, editing }: { open: boolean; onOpenC
   // reset on open change
   if (open && editing && editing.id !== (editing as Service).id) { /* noop */ }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) { toast.error("Informe um nome"); return; }
     if (duration % 15 !== 0) { toast.error("Duração deve ser múltipla de 15min"); return; }
-    actions.upsertService({
-      id: editing?.id, name: name.trim(), description, price: Number(price) || 0,
-      durationMin: Number(duration), category, color, active,
+    await Services.servico.salvar({
+      id: editing?.id,
+      nome: name.trim(),
+      descricao: description,
+      preco: Number(price) || 0,
+      duracaoMin: Number(duration),
+      categoria: category as CategoriaServico,
+      cor: color,
+      ativo: active,
     });
     toast.success(editing ? "Serviço atualizado" : "Serviço criado");
     onOpenChange(false);

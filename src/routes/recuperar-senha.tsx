@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { Services } from "@/services";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,12 +19,17 @@ function ForgotPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + "/reset-password",
-    });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("Enviamos um link para o seu e-mail.");
+    try {
+      await Services.usuario.recuperarSenha({
+        email,
+        redirectUrl: window.location.origin + "/reset-password",
+      });
+      toast.success("Enviamos um link para o seu e-mail.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao enviar e-mail");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

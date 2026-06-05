@@ -9,7 +9,8 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Trash2, Plus } from "lucide-react";
-import { actions, useStore } from "@/lib/store";
+import { useStore } from "@/lib/store";
+import { Services } from "@/services";
 import type { BusinessHours } from "@/lib/types";
 import { weekdays, dateToISO, formatDateShort, minutesToLabel } from "@/lib/format";
 import { toast } from "sonner";
@@ -34,19 +35,19 @@ function SettingsPage() {
   const [blockStaff, setBlockStaff] = useState<string>("all");
   const [blockReason, setBlockReason] = useState("");
 
-  const saveGeneral = () => {
-    actions.updateSettings({ salonName, bufferMin: Number(buffer), businessHours: hours });
+  const saveGeneral = async () => {
+    await Services.configuracao.atualizar({ nomeSalao: salonName, bufferMin: Number(buffer), horarios: hours });
     toast.success("Configurações salvas");
   };
 
-  const addBlock = () => {
+  const addBlock = async () => {
     if (!blockDate) { toast.error("Escolha uma data"); return; }
-    actions.addBlocked({
-      date: dateToISO(blockDate),
-      startTime: blockStart,
-      durationMin: Number(blockDur),
-      staffId: blockStaff === "all" ? undefined : blockStaff,
-      reason: blockReason || undefined,
+    await Services.bloqueio.criar({
+      data: dateToISO(blockDate),
+      horaInicio: blockStart,
+      duracaoMin: Number(blockDur),
+      profissionalId: blockStaff === "all" ? undefined : blockStaff,
+      motivo: blockReason || undefined,
     });
     toast.success("Horário bloqueado");
     setBlockReason("");
@@ -155,7 +156,7 @@ function SettingsPage() {
                         {b.reason && <span className="text-muted-foreground"> · {b.reason}</span>}
                         <span className="text-muted-foreground"> · {b.staffId ? staff.find((s) => s.id === b.staffId)?.name : "Todos"}</span>
                       </div>
-                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => actions.removeBlocked(b.id)}>
+                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => Services.bloqueio.remover(b.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
