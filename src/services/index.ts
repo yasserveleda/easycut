@@ -1,25 +1,30 @@
 /**
- * Factory central de serviços — único ponto onde se decide entre
- * a implementação Mock (atual, apoiada em Lovable Cloud) e a HTTP
- * (futura, apoiada em BFF).
+ * Factory central de serviços — único ponto onde se decide a implementação
+ * usada pela aplicação. Hoje todos os serviços rodam 100% offline em cima
+ * de LocalStorage (`*ServiceLocal`). Para migrar para um BFF HTTP no
+ * futuro, basta trocar as instâncias abaixo pelas `*Http` correspondentes.
  *
- * Para trocar Mock → HTTP, basta instanciar as classes *Http aqui.
  * Nenhuma tela precisa ser alterada.
  */
-import { AgendamentoServiceMock } from "./agendamento/AgendamentoServiceMock";
+import { aplicarSeedSeNecessario } from "@/infrastructure/storage/seed";
+
+import { AgendamentoServiceLocal } from "./agendamento/AgendamentoServiceLocal";
 import type { IAgendamentoService } from "./agendamento/IAgendamentoService";
-import { BloqueioServiceMock } from "./bloqueio/BloqueioServiceMock";
+import { BloqueioServiceLocal } from "./bloqueio/BloqueioServiceLocal";
 import type { IBloqueioService } from "./bloqueio/IBloqueioService";
-import { ConfiguracaoServiceMock } from "./configuracao/ConfiguracaoServiceMock";
+import { ConfiguracaoServiceLocal } from "./configuracao/ConfiguracaoServiceLocal";
 import type { IConfiguracaoService } from "./configuracao/IConfiguracaoService";
-import { ProfissionalServiceMock } from "./profissional/ProfissionalServiceMock";
+import { ProfissionalServiceLocal } from "./profissional/ProfissionalServiceLocal";
 import type { IProfissionalService } from "./profissional/IProfissionalService";
-import { RealtimeServiceMock } from "./realtime/RealtimeServiceMock";
+import { RealtimeServiceLocal } from "./realtime/RealtimeServiceLocal";
 import type { IRealtimeService } from "./realtime/IRealtimeService";
-import { ServicoServiceMock } from "./servico/ServicoServiceMock";
+import { ServicoServiceLocal } from "./servico/ServicoServiceLocal";
 import type { IServicoService } from "./servico/IServicoService";
-import { UsuarioServiceMock } from "./usuario/UsuarioServiceMock";
+import { UsuarioServiceLocal } from "./usuario/UsuarioServiceLocal";
 import type { IUsuarioService } from "./usuario/IUsuarioService";
+
+// Garante seed inicial antes da primeira leitura.
+aplicarSeedSeNecessario();
 
 export interface ServiceRegistry {
   agendamento: IAgendamentoService;
@@ -32,13 +37,13 @@ export interface ServiceRegistry {
 }
 
 export const Services: ServiceRegistry = {
-  agendamento: new AgendamentoServiceMock(),
-  bloqueio: new BloqueioServiceMock(),
-  configuracao: new ConfiguracaoServiceMock(),
-  profissional: new ProfissionalServiceMock(),
-  realtime: new RealtimeServiceMock(),
-  servico: new ServicoServiceMock(),
-  usuario: new UsuarioServiceMock(),
+  agendamento: new AgendamentoServiceLocal(),
+  bloqueio: new BloqueioServiceLocal(),
+  configuracao: new ConfiguracaoServiceLocal(),
+  profissional: new ProfissionalServiceLocal(),
+  realtime: new RealtimeServiceLocal(),
+  servico: new ServicoServiceLocal(),
+  usuario: new UsuarioServiceLocal(),
 };
 
 // Re-exports para conveniência.
